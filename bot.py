@@ -11,12 +11,12 @@ def welcome(message):
 مثال: BTC أو ETH أو PEPE
 
 👨‍💻 صاحب البوت: @ipr_4"""
-    bot.reply_to(message, text)
+    bot.send_message(message.chat.id, text)
 
 @bot.message_handler(func=lambda m: True)
 def analyze(message):
     coin = message.text.upper().strip()
-    bot.reply_to(message, f"⏳ جاري تحليل {coin}...")
+    bot.send_message(message.chat.id, f"⏳ جاري تحليل {coin}...")
 
 print("Bot is running...")
 bot.infinity_polling()
