@@ -2,8 +2,8 @@ import telebot
 import requests
 from datetime import datetime
 
-BOT_TOKEN = "8481866188:AAGN9xGupU0yDrUZSqwDf4ZAE_LYiolmGNE"
-AIRTABLE_TOKEN = "patz21qaZoRloAnBC.bf6fccdfb2075958857b96dd78de8411e781a9b6ca4fd16a680b1fb9f8f3b57d"
+BOT_TOKEN = "8106633094:AAEODJL02gcK-5VTpnXxgYDyi8anSQiJ9hQ"
+AIRTABLE_TOKEN = "patnOmcrxm6o9KT2T.185f28d0b1d8e0ce28671be2edc7e441f7a5aecf0b01c01458c730693a388b21"
 AIRTABLE_BASE = "appvuIfgZfQAxPsld"
 AIRTABLE_TABLE = "tblkFGjUvXvIrjhcE"
 
@@ -20,12 +20,13 @@ def add_to_airtable(coin, chat_id):
             "fields": {
                 "coin": coin,
                 "chat_id": chat_id,
-                "status": "pending",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
+                "status": "pending"
             }
         }]
     }
-    requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data)
+    print(f"Airtable response: {response.status_code} - {response.text}")
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
@@ -56,3 +57,4 @@ def analyze(message):
 
 print("Bot is running...")
 bot.infinity_polling()
+
