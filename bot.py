@@ -2,7 +2,7 @@ import telebot
 import requests
 from datetime import datetime
 
-BOT_TOKEN = "8106633094:AAEODJL02gcK-5VTpnXxgYDyi8anSQiJ9hQ"
+BOT_TOKEN = "8481866188:AAHq1aHpze1zOkqw4uypl8pb0-Bcp0nAmD4"
 AIRTABLE_TOKEN = "patnOmcrxm6o9KT2T.185f28d0b1d8e0ce28671be2edc7e441f7a5aecf0b01c01458c730693a388b21"
 AIRTABLE_BASE = "appvuIfgZfQAxPsld"
 AIRTABLE_TABLE = "tblkFGjUvXvIrjhcE"
@@ -57,4 +57,3 @@ def analyze(message):
 
 print("Bot is running...")
 bot.infinity_polling()
-
