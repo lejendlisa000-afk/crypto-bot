@@ -2,7 +2,7 @@ import telebot
 import requests
 from datetime import datetime
 
-BOT_TOKEN = "8481866188:AAGN9xGupU0yDrUZSqwDf4ZAE_LYiolmGNE"
+BOT_TOKEN = "8106633094:AAEODJL02gcK-5VTpnXxgYDyi8anSQiJ9hQ"
 AIRTABLE_TOKEN = "patz21qaZoRloAnBC.bf6fccdfb2075958857b96dd78de8411e781a9b6ca4fd16a680b1fb9f8f3b57d"
 AIRTABLE_BASE = "appvuIfgZfQAxPsld"
 AIRTABLE_TABLE = "tblkFGjUvXvIrjhcE"
