@@ -1,7 +1,9 @@
 import telebot
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from telebot import types
+import json
+import os
 
 BOT_TOKEN = "8481866188:AAHq1aHpze1zOkqw4uypl8pb0-Bcp0nAmD4"
 AIRTABLE_TOKEN = "patnOmcrxm6o9KT2T.185f28d0b1d8e0ce28671be2edc7e441f7a5aecf0b01c01458c730693a388b21"
@@ -11,12 +13,37 @@ PASSWORD = "123$"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# حفظ حالة المستخدمين
-user_states = {}
-authorized_users = set()
-pending_coins = {}
+# حفظ المستخدمين المصرح لهم مع تاريخ التصريح
+auth_file = "authorized_users.json"
 
-def add_to_airtable(coin, chat_id, track=False):
+def load_authorized():
+    try:
+        if os.path.exists(auth_file):
+            with open(auth_file, 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return {}
+
+def save_authorized(data):
+    with open(auth_file, 'w') as f:
+        json.dump(data, f)
+
+def is_authorized(chat_id):
+    data = load_authorized()
+    chat_str = str(chat_id)
+    if chat_str in data:
+        auth_date = datetime.fromisoformat(data[chat_str])
+        if datetime.now() - auth_date < timedelta(days=30):
+            return True
+    return False
+
+def authorize_user(chat_id):
+    data = load_authorized()
+    data[str(chat_id)] = datetime.now().isoformat()
+    save_authorized(data)
+
+def add_to_airtable(coin, chat_id):
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE}/{AIRTABLE_TABLE}"
     headers = {
         "Authorization": f"Bearer {AIRTABLE_TOKEN}",
@@ -28,132 +55,69 @@ def add_to_airtable(coin, chat_id, track=False):
                 "coin": coin,
                 "chat_id": chat_id,
                 "timestamp": datetime.now().isoformat(),
-                "status": "track" if track else "pending"
+                "status": "pending"
             }
         }]
     }
     requests.post(url, headers=headers, json=data)
 
-def show_main_menu(chat_id):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-    btn1 = types.KeyboardButton("📊 تحليل يومي (Top 10)")
-    btn2 = types.KeyboardButton("🔍 تحليل عملة معينة")
-    markup.add(btn1, btn2)
-    bot.send_message(chat_id, "✅ اختر ما تريد:", reply_markup=markup)
+def show_menu(chat_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("📊 تحليل يومي"))
+    markup.add(types.KeyboardButton("🔍 تحليل عملة"))
+    bot.send_message(chat_id, "✅ مرحباً! اختر من القائمة:", reply_markup=markup)
+
+waiting_password = set()
 
 @bot.message_handler(commands=['start'])
-def welcome(message):
+def start(message):
     chat_id = message.chat.id
-    user_states[chat_id] = "waiting_password"
-    
-    markup = types.ReplyKeyboardRemove()
-    bot.send_message(chat_id, """🔐 مرحباً بك في محلل العملات الذكي!
-
-⚠️ هذا البوت محمي بكلمة مرور.
-
-أرسل كلمة المرور للدخول:""", reply_markup=markup)
+    if is_authorized(chat_id):
+        show_menu(chat_id)
+    else:
+        waiting_password.add(chat_id)
+        bot.send_message(chat_id, "🔐 مرحباً بك!\n\nأدخل كلمة المرور للمتابعة:")
 
 @bot.message_handler(func=lambda m: True)
-def handle_message(message):
+def handle(message):
     chat_id = message.chat.id
     text = message.text.strip()
-    state = user_states.get(chat_id, "waiting_password")
     
-    # حالة انتظار الباسورد
-    if state == "waiting_password":
+    # انتظار الباسورد
+    if chat_id in waiting_password:
         if text == PASSWORD:
-            authorized_users.add(chat_id)
-            user_states[chat_id] = "main_menu"
+            waiting_password.discard(chat_id)
+            authorize_user(chat_id)
             bot.send_message(chat_id, "✅ تم التحقق بنجاح!")
-            show_main_menu(chat_id)
+            show_menu(chat_id)
         else:
-            bot.send_message(chat_id, "❌ كلمة المرور خاطئة. حاول مرة أخرى.")
+            bot.send_message(chat_id, "❌ كلمة المرور خاطئة. حاول مرة أخرى:")
         return
     
-    # التحقق من التصريح
-    if chat_id not in authorized_users:
-        user_states[chat_id] = "waiting_password"
-        bot.send_message(chat_id, "🔐 أرسل كلمة المرور أولاً:")
+    # التحقق من الصلاحية
+    if not is_authorized(chat_id):
+        waiting_password.add(chat_id)
+        bot.send_message(chat_id, "🔐 انتهت صلاحيتك. أدخل كلمة المرور:")
         return
     
-    # القائمة الرئيسية
-    if text == "📊 تحليل يومي (Top 10)" or text == "1":
-        user_states[chat_id] = "main_menu"
-        bot.send_message(chat_id, "⏳ جاري طلب التحليل اليومي لأفضل 10 عملات...")
-        add_to_airtable("TOP10_DAILY", chat_id, track=False)
-        bot.send_message(chat_id, "✅ تم! سيصلك التحليل خلال دقيقة.")
-        show_main_menu(chat_id)
+    # القائمة
+    if "يومي" in text:
+        bot.send_message(chat_id, "⏳ جاري طلب التحليل اليومي...")
+        add_to_airtable("TOP10", chat_id)
         return
     
-    if text == "🔍 تحليل عملة معينة" or text == "2":
-        user_states[chat_id] = "waiting_coin"
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = types.KeyboardButton("🔙 رجوع")
-        markup.add(btn)
-        bot.send_message(chat_id, """🔍 أرسل رمز العملة التي تريد تحليلها:
-
-مثال: BTC, ETH, PEPE, SHIB""", reply_markup=markup)
+    if "عملة" in text:
+        bot.send_message(chat_id, "🔍 أرسل رمز العملة (مثال: BTC, ETH, PEPE):")
         return
     
-    if text == "🔙 رجوع":
-        user_states[chat_id] = "main_menu"
-        show_main_menu(chat_id)
-        return
-    
-    # انتظار اسم العملة
-    if state == "waiting_coin":
-        coin = text.upper()
-        if coin == "🔙 رجوع":
-            user_states[chat_id] = "main_menu"
-            show_main_menu(chat_id)
-            return
-        
-        pending_coins[chat_id] = coin
-        user_states[chat_id] = "waiting_entry_confirm"
-        
+    # استقبال رمز العملة
+    if text.replace("$", "").isalpha() and len(text) <= 10:
+        coin = text.upper().replace("$", "")
         bot.send_message(chat_id, f"⏳ جاري تحليل {coin}...")
-        add_to_airtable(coin, chat_id, track=False)
-        
-        # سؤال هل دخلت الصفقة
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-        btn1 = types.KeyboardButton("✅ نعم، دخلت الصفقة")
-        btn2 = types.KeyboardButton("👀 لا، اطلاعي فقط")
-        markup.add(btn1, btn2)
-        bot.send_message(chat_id, "❓ هل ستدخل هذه الصفقة؟", reply_markup=markup)
+        add_to_airtable(coin, chat_id)
         return
     
-    # تأكيد الدخول
-    if state == "waiting_entry_confirm":
-        coin = pending_coins.get(chat_id, "")
-        
-        if "نعم" in text or "دخلت" in text:
-            add_to_airtable(coin, chat_id, track=True)
-            bot.send_message(chat_id, f"""✅ تم تفعيل المتابعة لعملة {coin}!
-
-📢 سأرسل لك إشعارات عند:
-- تحقق أي هدف
-- الاقتراب من وقف الخسارة
-- تغيرات مهمة في السعر
-
-🔔 ابقَ متابعاً!""")
-            user_states[chat_id] = "main_menu"
-            show_main_menu(chat_id)
-        
-        elif "لا" in text or "اطلاعي" in text:
-            bot.send_message(chat_id, f"👀 تم! تحليل {coin} للاطلاع فقط.\n\nلن أرسل إشعارات متابعة.")
-            user_states[chat_id] = "main_menu"
-            show_main_menu(chat_id)
-        
-        else:
-            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-            btn1 = types.KeyboardButton("✅ نعم، دخلت الصفقة")
-            btn2 = types.KeyboardButton("👀 لا، اطلاعي فقط")
-            markup.add(btn1, btn2)
-            bot.send_message(chat_id, "❓ اختر من الأزرار:", reply_markup=markup)
-        return
-    
-    # أي رسالة أخرى
-    show_main_menu(chat_id)
+    show_menu(chat_id)
 
 print("Bot is running...")
 bot.infinity_polling()
